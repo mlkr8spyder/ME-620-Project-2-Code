@@ -45,7 +45,8 @@ T(ny-3, 3) = 2000;
 T(ny-3, 4) = 2000;
 
 %Calculate the energy consumption rate of each element when burning
-r_b = 3.5*10^(-4);        %Steady-State Burn Rate (m^2/s)
+% r_b = 3.5*10^(-4);        %Steady-State Burn Rate (m^2/s)
+r_b = 0.035;        %Steady-State Burn Rate (m^2/s)
 T_burn = 2000;            %Steady-State burn temperature (C)
 T_ig = 300;               %Ignition Temperature (C)
 V_b = r_b*D;              %Volume Burn Rate (m^3/s)

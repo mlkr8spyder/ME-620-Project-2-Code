@@ -1,4 +1,4 @@
-function [rd,Tsd, flame_temp] = project_2_wsb_function(P,T0)
+function [rd,Tsd, fla] = project_2_wsb_function(P,T0)
 % Original Author: Andrew Rettenmaier
 % Oct. 10th, 2011
 % ME 697C
