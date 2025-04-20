@@ -2,11 +2,11 @@
 clear all; close all; clc;
 
 % Input parameters
-L       = 0.5;
-H       = 0.5;
-dx      = 0.0025;
-dy      = 0.0025;
-tmax    = 25;
+L       = 0.25;
+H       = 0.05;
+dx      = 0.00025;
+dy      = 0.00025;
+tmax    = 50;
 dt      = 0.01;
 epsilon = 10^(-4);
 alp     = 1.9*10^(-5);
@@ -19,11 +19,11 @@ Tign = 300; % Arbitrary ignition temp
 Tf = 1000
 [rb_wsb, Tf_test, T_flame]   = project_2_wsb_function(P,Tign); 
 
-% Tf = Tf;
-% % Tf = Tf_test
+Tf = Tf;
+% Tf = T_flame
 
-% Tf = Tf;
-Tf = T_flame
+% % Tf = Tf;
+% Tf = T_flame
 
 % create the x, y meshgrid based on dx, dy
 nx    = uint32(L/dx + 1);
@@ -35,10 +35,10 @@ ny    = uint32(H/dy + 1);
 % increment dt until all of that material is burned out. After that, force
 % an "off" temperature
 % Note this is just initializing, this would be added to the loop
-rb = ones(nx,ny);
+%rb = ones(ny,nx);
 
-thickness = 1; % thickness of material [cm]
-material = ones(nx,ny).*thickness;
+thickness = 0.1; % thickness of material [cm]
+material = ones(ny,nx).*thickness;
 
 % set initial and boundary conditions
 T_int = 100;
@@ -49,18 +49,20 @@ n    = 0;
 nmax = uint32(tmax/dt);
 
 %Logical Matrix
-L    = zeros(nx,ny);
+L    = zeros(ny,nx);
 
 % Set corner node to flame temp
-T(ny,2) = Tf;
+T(:,2) = Tf;
 
 count = 0
 
 grid_ignite = (T >= Tign) & (material > 0);
 L = L | grid_ignite;
 burning = L & (material > 0);
+L_n0 = L;
 
 while any(burning(:)) && n < nmax
+% while n < nmax
     
     % Increment time
     n = n + 1;
@@ -71,7 +73,7 @@ while any(burning(:)) && n < nmax
         for i = 2:nx-1
             T(j,i) = T_n(j,i) + r_x*(T_n(j,i+1)-2*T_n(j,i)+T_n(j,i-1))...
                 + r_y*(T_n(j+1,i)-2*T_n(j,i)+T_n(j-1,i));
-            if L(i,j) == 1 && L_n0(i,j) == 0
+            if L(j,i) == 1 && L_n0(j,i) == 0
                %wsb_test = project_2_wsb_function(P, T(j,i));
                count = count + 1;
             end
@@ -109,13 +111,13 @@ while any(burning(:)) && n < nmax
 
     % Turn off nodes that have burnt out here, probably?
     burning = L & (material > 0);
-    material = material - burning.*(rb*dt);
+    material = material - burning.*(rb_wsb*dt);
     material(material < 0) = 0;
 
     L (material == 0) = 0;
 
 
-    plot_refresh = 25;
+    plot_refresh = 50;
     if uint16(n/plot_refresh) == n/plot_refresh % refresh the plot every 50 time steps to save time     
         clf                    % clear figure
         
