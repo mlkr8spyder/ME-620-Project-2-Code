@@ -58,7 +58,7 @@ node_status = zeros(ny,nx);
 % material(:,  1) = 0;    % left  column
 % material(:,end) = 0;    % right column
 
-sides_inhibitor = 1;
+sides_inhibitor = 0;
 
 if sides_inhibitor == 1
     boundary_buffer = 0.1 * ny;

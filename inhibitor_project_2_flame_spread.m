@@ -50,7 +50,7 @@ temp = temp_int*ones(ny,nx);
 % Logical Matrix
 node_status = zeros(ny,nx);
 
-sides_inhibitor = 0;
+sides_inhibitor = 1;
 
 if sides_inhibitor == 1
     boundary_buffer = 0.1 * ny;
