@@ -81,9 +81,9 @@ while n < nmax
 
     test_j = 25;
     test_i = 10;
-    test_time_history(1,n) = T(test_j,test_i);
-    test_time_history(2,n) = burning(test_j,test_i);
-    test_time_history(3,n) = material(test_j,test_i);
+
+    test_time_history(:,n) = [T(test_j,test_i); burning(test_j,test_i); material(test_j,test_i)];
+    
     % Search for values exceeding the ignition temperature
     L_n0 = L;
     grid_ignite = (T >= Tign) & (material > 0);

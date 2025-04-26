@@ -2,71 +2,65 @@
 clear all; close all; clc;
 
 % Input parameters
-L       = 0.25;
-H       = 0.05;
+grid_length       = 0.3;
+grid_height       = 0.05;
 dx      = 0.001;
-dy      = 0.001;
-tmax    = 20;
-dt      = 0.01;
-epsilon = 10^(-4);
+dy      = 0.0005;
+time_max    = 5;
+dt      = 0.0005;
+tolerance = 10^(-4);
 k = 0.2;
 cp = 1400;
 rho = 1800;
 % alp = k / (cp * rho);
-alp     = 1.9*10^(-5);
-r_x     = alp*dt/dx^2;
-r_y     = alp*dt/dy^2;
+alpha     = 1.9*10^(-5);
+r_x     = alpha*dt/dx^2;
+r_y     = alpha*dt/dy^2;
 
-% This would need to be initialized with WSB, I think
-P = 10; % Pressure [atm]
-Tign = 500; % Arbitrary ignition temp
-Tf = 2000
-[rb_wsb, Tf_test, T_flame]   = project_2_wsb_function(P,Tign); 
+P = 5; % Pressure [atm]
+temp_ign = 500; % Arbitrary ignition temp
+temp_flame = 2000
+[rb_wsb, Tf_test, temp_flame_wsb]   = project_2_wsb_function(P,temp_ign); 
 
-Tf = Tf;
-% Tf = T_flame
+% Tf = Tf;
+% % Tf = T_flame
 
-% % Tf = Tf;
-% Tf = T_flame
+% Tf = Tf;
+temp_flame = temp_flame_wsb
 
 % create the x, y meshgrid based on dx, dy
-nx    = uint32(L/dx + 1);
-ny    = uint32(H/dy + 1);
-[X,Y] = meshgrid(linspace(0,L,nx),linspace(0,H,ny));
-
-% Matrix of burning rates - could use this with dt to determine when
-% a node burns out. Initialize a burn "start time" for each node, and then
-% increment dt until all of that material is burned out. After that, force
-% an "off" temperature
-% Note this is just initializing, this would be added to the loop
-%rb = ones(ny,nx);
+nx    = uint32(grid_length/dx + 1);
+ny    = uint32(grid_height/dy + 1);
+[X,Y] = meshgrid(linspace(0,grid_length,nx),linspace(0,grid_height,ny));
 
 thickness = 0.1; % thickness of material [cm]
 material = ones(ny,nx).*thickness;
 
 % set initial and boundary conditions
-T_int = 293;
-T = T_int*ones(ny,nx);
+temp_int = 293;
+temp = temp_int*ones(ny,nx);
 
 % iteration, march in time
 n    = 0; 
-nmax = uint32(tmax/dt);
+nmax = uint32(time_max/dt);
 
 %Logical Matrix
-L = zeros(ny,nx);
+node_status = zeros(ny,nx);
 
 % Set corner node to flame temp
 % T(floor(ny/2),1) = Tf;
-T(:,1) = Tf
+temp((ny*0.4):(ny*0.6),2) = temp_flame;
 
-count = 0
+count = 0;
 
-grid_ignite = (T >= Tign) & (material > 0);
-L = L | grid_ignite;
-burning = L & (material > 0);
-L_n0 = L;
+grid_ignite = (temp >= temp_ign) & (material > 0);
+node_status = node_status | grid_ignite;
+burning = node_status & (material > 0);
+node_status_n0 = node_status;
 
 test_time_history = zeros(3,nmax);
+time_history_j = 25;
+time_history_i = 10;
 
 % while any(burning(:)) && n < nmax
 while n < nmax
@@ -74,66 +68,42 @@ while n < nmax
     % Increment time
     n = n + 1;
     
-    T_n = T;
+    T_n = temp;
 
     for j = 2:ny-1
         for i = 2:nx-1
-            T(j,i) = T_n(j,i) + r_x*(T_n(j,i+1)-2*T_n(j,i)+T_n(j,i-1))...
-                + r_y*(T_n(j+1,i)-2*T_n(j,i)+T_n(j-1,i));
-            if L(j,i) == 1 && L_n0(j,i) == 0
+            temp(j,i) = T_n(j,i) + r_x*(T_n(j,i+1)-2*T_n(j,i)+T_n(j,i-1)) + r_y*(T_n(j+1,i)-2*T_n(j,i)+T_n(j-1,i));
+            if node_status(j,i) == 1 && node_status_n0(j,i) == 0
                %wsb_test = project_2_wsb_function(P, T(j,i));
                count = count + 1;
             end
         end
     end
+
+    test_time_history(:,n) = [temp(time_history_j,time_history_i); burning(time_history_j,time_history_i); material(time_history_j,time_history_i)];
     
-    % for i = 1:nx
-    %     j = ny;
-    %     T(j,i) = T(j-1, i);
-    % end
-    % 
-    % for i = 1:nx
-    %     j = 1;
-    %     T(j,i) = T(j+1, i);
-    % end
-    % 
-    % 
-    % for j = 1:ny
-    %     i = nx;
-    %     T(j,i) = T(j, i-1);
-    % end
-    % 
-    % for j = 1:ny
-    %     i = 1;
-    %     T(j,i) = T(j, i+1);
-    % end
-    test_j = 25;
-    test_i = 10;
-    test_time_history(1,n) = T(test_j,test_i);
-    test_time_history(2,n) = burning(test_j,test_i);
-    test_time_history(3,n) = material(test_j,test_i);
     % Search for values exceeding the ignition temperature
-    L_n0 = L;
-    grid_ignite = (T >= Tign) & (material > 0);
-    L = L | grid_ignite;
+    node_status_n0 = node_status;
+    grid_ignite = (temp >= temp_ign) & (material > 0);
+    node_status = node_status | grid_ignite;
 
     % Set any values exceeding ignition temperature to flame temp
-    T(L) = Tf;
+    temp(node_status) = temp_flame;
 
     % Turn off nodes that have burnt out here, probably?
-    burning = L & (material > 0);
+    burning = node_status & (material > 0);
     material = material - burning.*(rb_wsb*dt);
     material(material < 0) = 0;
 
-    L (material == 0) = 0;
+    node_status (material == 0) = 0;
 
 
     plot_refresh = 50;
     if uint16(n/plot_refresh) == n/plot_refresh % refresh the plot every 50 time steps to save time     
-        clf                    % clear figure
+        clf
         
         subplot(1,3,1)
-        contourf(X, Y, T,  10, 'LineColor','none')
+        contourf(X, Y, temp,  10, 'LineColor','none')
         title(sprintf('T @ %g s', n*dt))
         xlabel('x (m)')
         ylabel('y (m)')
@@ -148,7 +118,7 @@ while n < nmax
         axis equal tight
         
         subplot(1,3,3)
-        contourf(X, Y, L, 2, 'LineColor','none')
+        contourf(X, Y, node_status, 2, 'LineColor','none')
         title(sprintf('Burning @ %g s', n*dt))
         xlabel('x (m)')
         ylabel('y (m)')
@@ -159,8 +129,8 @@ while n < nmax
     
 
     % check for convergence
-    err = max(max(abs((T-T_n))));
-    if err <= epsilon
+    err = max(max(abs((temp-T_n))));
+    if err <= tolerance
         break
     end
 end
