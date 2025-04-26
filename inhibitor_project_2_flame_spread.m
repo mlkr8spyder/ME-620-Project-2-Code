@@ -13,7 +13,7 @@ nmax = uint32(time_max/dt);
 tolerance = 10^(-4);
 
 %% Solid Parameters
-k = 0.2 * 10;
+k = 0.2 * 1;
 cp = 1400;
 rho = 1800;
 alpha = (k/(cp*rho)) * 1e4;
