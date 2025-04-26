@@ -29,7 +29,7 @@ r_x_g = alpha_g*dt/dx^2;
 r_y_g = alpha_g*dt/dy^2;
 
 %% WSB Initialize
-P = 10; % Pressure [atm]
+P = 20; % Pressure [atm]
 temp_ign = 500; % Ignition temp
 [rb_wsb, Tf_test, temp_flame_wsb]   = project_2_wsb_function(P,temp_ign);
 temp_flame = temp_flame_wsb;
@@ -37,6 +37,10 @@ temp_flame = temp_flame_wsb;
 %% Create the x, y meshgrid based on dx, dy
 nx = uint32(grid_length/dx + 1);
 ny = uint32(grid_height/dy + 1);
+
+% Set the left and right buffer nodes to 10% of Y length
+boundary_buffer = 0.1 * ny;
+nx = nx + 2*boundary_buffer;
 [X,Y] = meshgrid(linspace(0,grid_length,nx),linspace(0,grid_height,ny));
 
 %% Material Map
@@ -47,12 +51,12 @@ material = ones(ny,nx).*thickness;
 temp_int = 293;
 temp = temp_int*ones(ny,nx);
 
-% Logical Matrix
+% Logical Matrix to handle if node is active
 node_status = zeros(ny,nx);
 
-sides_inhibitor = 1;
+sides_inhibitor = 1; % Inhibitor BCs
 
-boundary_buffer = 0.1 * ny;
+% Initial Flame location from 48% to 52% along the Y length
 boundary_flame_y_start = round(ny*0.48);
 boundary_flame_y_end = round(ny*0.52);
 
@@ -61,7 +65,11 @@ material(end,:) = 0;    % bottom row
 material(:,1:boundary_buffer) = 0;    % left  column
 material(:,end-(boundary_buffer-1):end) = 0;    % right column
 
+% Set initial boundary to the ignition temperature
 temp((boundary_flame_y_start):(boundary_flame_y_end),boundary_buffer+1) = temp_ign;
+
+% Initialize the solid gas ratio, used for calculating the thermal
+% diffusivity when there are two phases
 solid_gas_ratio = material ./ thickness;
 
 %% Burn Rate and Flame-Temp Maps
@@ -70,11 +78,22 @@ Tf_map = temp_int * ones(ny,nx);
 t_surface_map = temp_int * ones(ny,nx);
 
 %% Initial Ignition
+% Determines if a grid point should ignite by comparing temperature to the
+% ingition temperature and making sure the node has material available
 grid_ignite = (temp >= temp_ign) & (material > 0);
+
+% Sets new node status based off previous node status and new grid ignition
 node_status = node_status | grid_ignite;
+
+% Is redudndant, but an artifact of a previous version of this code so it
+% gets to stay in since burning is used in other areas
 burning = node_status & (material > 0);
+
+% Node status before iterating
 node_status_n0 = node_status;
 
+% Intializes the BC's in the burning rate, surface temperature, and flame
+% temperature maps
 [j_list0, i_list0] = find(node_status_n0);
 for k = 1:numel(i_list0)
     i_k0 = i_list0(k);
@@ -90,6 +109,8 @@ test_time_history = zeros(3,nmax);
 time_history_j = round(ny/2);
 time_history_i = round(nx/2);
 
+
+
 while any(burning(:)) && n < nmax    
     % Increment time
     n = n + 1;
@@ -103,11 +124,6 @@ while any(burning(:)) && n < nmax
             else
                 isGas = (temp_n(j,i) >= temp_ign) || (material(j,i) == 0);
                 
-                % pick diffusivities for each neighbor direction
-                % if isGas || material(j,i+1)==0, rx_east = r_x_g; else rx_east = r_x; end
-                % if isGas || material(j,i-1)==0, rx_west = r_x_g; else rx_west = r_x; end
-                % if isGas || material(j+1,i)==0, ry_south = r_y_g; else ry_south = r_y; end
-                % if isGas || material(j-1,i)==0, ry_north = r_y_g; else ry_north = r_y; end
                 rx_east = solid_gas_ratio(j,i+1)*r_x + (1-solid_gas_ratio(j,i+1))*r_x_g;
                 rx_west = solid_gas_ratio(j,i-1)*r_x + (1-solid_gas_ratio(j,i-1))*r_x_g;
                 ry_south = solid_gas_ratio(j+1,i)*r_x + (1-solid_gas_ratio(j+1,i))*r_x_g;
@@ -148,6 +164,17 @@ while any(burning(:)) && n < nmax
     node_status = node_status | grid_ignite;
     new_ignition = (node_status_n0 == 0) & (node_status == 1);
 
+    %% Estimate the flame spread speed
+    if new_ignition(30, boundary_buffer+20) == 1
+        flame_speed_1 = 1 / (n*dt);
+    elseif new_ignition(30, boundary_buffer+40) == 1
+        flame_speed_2 = 2 / (n*dt);
+    elseif new_ignition(30, boundary_buffer+60) == 1
+        flame_speed_3 = 3 / (n*dt);
+    elseif new_ignition(30, boundary_buffer+80) == 1
+        flame_speed_4 = 4 / (n*dt);
+    end
+
     %Calculate WSB for each new ignition
     [j_list, i_list] = find(new_ignition);
     for k = 1:numel(i_list)
@@ -163,7 +190,7 @@ while any(burning(:)) && n < nmax
     plot_refresh = 50;
     if uint16(n/plot_refresh) == n/plot_refresh % refresh the plot every 50 time steps to save time     
         clf
-        
+
         % subplot(1,3,1)
         % contourf(X, Y, temp,  10, 'LineColor','none')
         % title(sprintf('T @ %g s', n*dt))
@@ -180,24 +207,27 @@ while any(burning(:)) && n < nmax
         ylabel('y (cm)')
         colorbar
         axis equal tight
-        
+
         subplot(1,3,2)
         contourf(X, Y, material, 10, 'LineColor','none')
         title(sprintf('Thickness @ %g s', n*dt))
         xlabel('x (cm)')
         ylabel('y (cm)')
         axis equal tight
-        
+
         subplot(1,3,3)
         contourf(X, Y, node_status, 2, 'LineColor','none')
         title(sprintf('Burning @ %g s', n*dt))
         xlabel('x (cm)')
         ylabel('y (cm)')
         axis equal tight
-        
+
         pause(0.1)
     end
 end
+
+average_flame_speed = mean([flame_speed_1 flame_speed_2 flame_speed_3 flame_speed_4]);
+fprintf('The average flame speed is %f cm/sec',average_flame_speed)
 
 % test_time_history = test_time_history(:,1:n);
 % 

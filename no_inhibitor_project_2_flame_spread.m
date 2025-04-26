@@ -37,6 +37,11 @@ temp_flame = temp_flame_wsb;
 %% Create the x, y meshgrid based on dx, dy
 nx = uint32(grid_length/dx + 1);
 ny = uint32(grid_height/dy + 1);
+
+boundary_buffer = 0.1*ny;
+nx = nx + 2*boundary_buffer;
+ny = ny + 2*boundary_buffer;
+
 [X,Y] = meshgrid(linspace(0,grid_length,nx),linspace(0,grid_height,ny));
 
 %% Material Map
@@ -52,7 +57,6 @@ node_status = zeros(ny,nx);
 
 sides_inhibitor = 0;
 
-boundary_buffer = 0.1*ny;
 boundary_flame_y_start = boundary_buffer + 0.48 * (ny-(2*boundary_buffer));
 boundary_flame_y_end = boundary_buffer + 0.52 * (ny-(2*boundary_buffer));
 
@@ -104,11 +108,6 @@ while any(burning(:)) && n < nmax
             else
                 isGas = (temp_n(j,i) >= temp_ign) || (material(j,i) == 0);
                 
-                % pick diffusivities for each neighbor direction
-                % if isGas || material(j,i+1)==0, rx_east = r_x_g; else rx_east = r_x; end
-                % if isGas || material(j,i-1)==0, rx_west = r_x_g; else rx_west = r_x; end
-                % if isGas || material(j+1,i)==0, ry_south = r_y_g; else ry_south = r_y; end
-                % if isGas || material(j-1,i)==0, ry_north = r_y_g; else ry_north = r_y; end
                 rx_east = solid_gas_ratio(j,i+1)*r_x + (1-solid_gas_ratio(j,i+1))*r_x_g;
                 rx_west = solid_gas_ratio(j,i-1)*r_x + (1-solid_gas_ratio(j,i-1))*r_x_g;
                 ry_south = solid_gas_ratio(j+1,i)*r_x + (1-solid_gas_ratio(j+1,i))*r_x_g;
@@ -148,6 +147,17 @@ while any(burning(:)) && n < nmax
     grid_ignite = (temp >= temp_ign) & (material > 0);
     node_status = node_status | grid_ignite;
     new_ignition = (node_status_n0 == 0) & (node_status == 1);
+
+    %% Estimate the flame spread speed
+    if new_ignition(30, boundary_buffer+20) == 1
+        flame_speed_1 = 1 / (n*dt);
+    elseif new_ignition(30, boundary_buffer+40) == 1
+        flame_speed_2 = 2 / (n*dt);
+    elseif new_ignition(30, boundary_buffer+60) == 1
+        flame_speed_3 = 3 / (n*dt);
+    elseif new_ignition(30, boundary_buffer+80) == 1
+        flame_speed_4 = 4 / (n*dt);
+    end
 
     %Calculate WSB for each new ignition
     [j_list, i_list] = find(new_ignition);
@@ -192,6 +202,9 @@ while any(burning(:)) && n < nmax
         pause(0.1)
     end
 end
+
+average_flame_speed = mean([flame_speed_1 flame_speed_2 flame_speed_3 flame_speed_4]);
+fprintf('The average flame speed is %f cm/sec',average_flame_speed)
 
 % test_time_history = test_time_history(:,1:n);
 % 
