@@ -13,7 +13,7 @@ nmax = uint32(time_max/dt);
 tolerance = 10^(-4);
 
 %% Solid Parameters
-k = 0.2 * 10;
+k = 0.2 * 1;
 cp = 1400;
 rho = 1800;
 alpha = (k/(cp*rho)) * 1e4;
@@ -30,7 +30,7 @@ r_y_g = alpha_g*dt/dy^2;
 
 %% WSB Initialize
 P = 10; % Pressure [atm]
-temp_ign = 500; % Ignition temp
+temp_ign = 500; % Arbitrary ignition temp
 [rb_wsb, Tf_test, temp_flame_wsb]   = project_2_wsb_function(P,temp_ign);
 temp_flame = temp_flame_wsb;
 
@@ -50,20 +50,33 @@ temp = temp_int*ones(ny,nx);
 % Logical Matrix
 node_status = zeros(ny,nx);
 
-sides_inhibitor = 0;
+sides_inhibitor = 1;
 
-boundary_buffer = 0.1*ny;
-boundary_flame_y_start = boundary_buffer + 0.1 * (ny-(2*boundary_buffer));
-boundary_flame_y_end = boundary_buffer + 0.9 * (ny-(2*boundary_buffer));
+if sides_inhibitor == 1
+    boundary_buffer = 0.1 * ny;
+    boundary_flame_y_start = 2;
+    boundary_flame_y_end = ny-1;
 
-material(1:boundary_buffer,  :) = 0;    % bottom row
-material(end-(boundary_buffer-1):end,:) = 0;    % top row
-material(:,  1:boundary_buffer) = 0;    % left  column
-material(:,end-(boundary_buffer-1):end) = 0;    % right column
+    material(1,:) = 0;    % top row
+    material(end,:) = 0;    % bottom row
+    material(:,1:boundary_buffer) = 0;    % left  column
+    material(:,end-(boundary_buffer-1):end) = 0;    % right column
 
-temp((boundary_flame_y_start):(boundary_flame_y_end),boundary_buffer+1) = temp_ign;
-solid_gas_ratio = material ./ thickness;
+    temp((boundary_flame_y_start):(boundary_flame_y_end),boundary_buffer+1) = temp_ign;
+else 
+    boundary_buffer = 0.1*ny;
+    boundary_flame_y_start = boundary_buffer + 0.1 * (ny-(2*boundary_buffer));
+    boundary_flame_y_end = boundary_buffer + 0.9 * (ny-(2*boundary_buffer));
 
+    material(1:boundary_buffer,  :) = 0;    % bottom row
+    material(end-(boundary_buffer-1):end,:) = 0;    % top row
+    material(:,  1:boundary_buffer) = 0;    % left  column
+    material(:,end-(boundary_buffer-1):end) = 0;    % right column
+
+    temp((boundary_flame_y_start):(boundary_flame_y_end),boundary_buffer+1) = temp_ign;
+end
+
+solid_gas_ratio = material ./ thickness
 %% Burn Rate and Flame-Temp Maps
 rb_map = zeros(ny,nx);
 Tf_map = temp_int * ones(ny,nx);
@@ -90,9 +103,9 @@ test_time_history = zeros(3,nmax);
 time_history_j = round(ny/2);
 time_history_i = round(nx/2);
 
-flux_map = cel
-
 while any(burning(:)) && n < nmax
+% while n < nmax
+    
     % Increment time
     n = n + 1;
     current_time = n*dt;
@@ -100,8 +113,8 @@ while any(burning(:)) && n < nmax
 
     for j = 2:ny-1
         for i = 2:nx-1
-            if node_status(j,i) == 1
-                temp(j,i) = Tf_map(j,i);
+            if burning(j,i) == 1
+                temp(j,i) = temp_flame;
             else
                 isGas = (temp_n(j,i) >= temp_ign) || (material(j,i) == 0);
                 
@@ -114,7 +127,7 @@ while any(burning(:)) && n < nmax
                 rx_west = solid_gas_ratio(j,i-1)*r_x + (1-solid_gas_ratio(j,i-1))*r_x_g;
                 ry_south = solid_gas_ratio(j+1,i)*r_x + (1-solid_gas_ratio(j+1,i))*r_x_g;
                 ry_north = solid_gas_ratio(j-1,i)*r_x + (1-solid_gas_ratio(j-1,i))*r_x_g;
-
+                
                 temp_P = temp_n(j,i);
                 temp_east = temp_n(j,i+1);
                 temp_west = temp_n(j,i-1);
@@ -138,9 +151,8 @@ while any(burning(:)) && n < nmax
     
     % Turn off nodes that have burnt out here
     burning = node_status & (material > 0);
-    material = material - burning.*(rb_map.*dt);
+    material = material - burning.*(rb_wsb*dt);
     material(material < 0) = 0;
-    solid_gas_ratio = material ./ thickness;
 
     node_status (material == 0) = 0;
     
@@ -162,10 +174,20 @@ while any(burning(:)) && n < nmax
         t_surface_map(j_k,i_k) = t_surf_k;
     end
 
+    % Set any values exceeding ignition temperature to flame temp
+    temp(node_status) = temp_flame;
+
     plot_refresh = 50;
     if uint16(n/plot_refresh) == n/plot_refresh % refresh the plot every 50 time steps to save time     
         clf
         
+        % subplot(1,3,1)
+        % contourf(X, Y, temp,  10, 'LineColor','none')
+        % title(sprintf('T @ %g s', n*dt))
+        % xlabel('x (cm)')
+        % ylabel('y (cm)')
+        % colorbar
+        % axis equal tight
         propellant_only_x = [boundary_buffer + 1:nx-boundary_buffer];
         propellant_only_y = [boundary_buffer + 1:ny-boundary_buffer];
         subplot(1,3,1)
@@ -192,16 +214,28 @@ while any(burning(:)) && n < nmax
         
         pause(0.1)
     end
+    
+
+    % check for convergence
+    % stillSolid = ~node_status;  
+    % if any(stillSolid(:))
+    %     err = max(abs(temp(stillSolid) - temp_n(stillSolid)));
+    %     if err <= tolerance
+    %          fprintf("Stopping at step %d (t=%g s) due to convergence: err=%g ≤ tol\n", ...
+    %                 n, n*dt, err);
+    %         break
+    %     end
+    % end
 end
 
-% test_time_history = test_time_history(:,1:n);
-% 
-% %% Time History Plotting
-% figure
-% plot(1:n,test_time_history(1,:))
-% ylim([0 2200])
-% hold on
-% grid on
-% yyaxis right
-% plot(1:n,test_time_history(3,:))
+test_time_history = test_time_history(:,1:n);
+
+%% Time History Plotting
+figure
+plot(1:n,test_time_history(1,:))
+ylim([0 2200])
+hold on
+grid on
+yyaxis right
+plot(1:n,test_time_history(3,:))
 
