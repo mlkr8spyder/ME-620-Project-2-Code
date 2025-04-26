@@ -4,8 +4,8 @@ clear all; close all; clc;
 % Input parameters
 grid_length = 4; % cm  
 grid_height = 2; % cm  
-dx = 0.05; % cm  (0.5 mm spacing)
-dy = 0.05; % cm  (0.5 mm spacing)
+dx = 0.04; % cm  (0.5 mm spacing)
+dy = 0.04; % cm  (0.5 mm spacing)
 time_max = 10;
 dt = 0.0005;
 n = 0; 
@@ -53,8 +53,8 @@ node_status = zeros(ny,nx);
 sides_inhibitor = 0;
 
 boundary_buffer = 0.1*ny;
-boundary_flame_y_start = boundary_buffer + 0.1 * (ny-(2*boundary_buffer));
-boundary_flame_y_end = boundary_buffer + 0.9 * (ny-(2*boundary_buffer));
+boundary_flame_y_start = boundary_buffer + 0.48 * (ny-(2*boundary_buffer));
+boundary_flame_y_end = boundary_buffer + 0.52 * (ny-(2*boundary_buffer));
 
 material(1:boundary_buffer,  :) = 0;    % bottom row
 material(end-(boundary_buffer-1):end,:) = 0;    % top row
@@ -162,7 +162,7 @@ while any(burning(:)) && n < nmax
     end
 
     plot_refresh = 50;
-    if uint16(n/plot_refresh) == n/plot_refresh % refresh the plot every 50 time steps to save time     
+    if uint16(n/plot_refresh) == n/plot_refresh % refresh the plot every plot_refresh time steps to save time     
         clf
         
         propellant_only_x = [boundary_buffer + 1:nx-boundary_buffer];

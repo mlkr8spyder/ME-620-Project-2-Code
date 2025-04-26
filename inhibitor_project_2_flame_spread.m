@@ -6,7 +6,7 @@ grid_length = 4; % cm
 grid_height = 2; % cm  
 dx = 0.05; % cm  (0.5 mm spacing)
 dy = 0.05; % cm  (0.5 mm spacing)
-time_max = 10;
+time_max = 20;
 dt = 0.0005;
 n = 0; 
 nmax = uint32(time_max/dt);
@@ -53,8 +53,8 @@ node_status = zeros(ny,nx);
 sides_inhibitor = 1;
 
 boundary_buffer = 0.1 * ny;
-boundary_flame_y_start = 2;
-boundary_flame_y_end = ny-1;
+boundary_flame_y_start = round(ny*0.48);
+boundary_flame_y_end = round(ny*0.52);
 
 material(1,:) = 0;    % top row
 material(end,:) = 0;    % bottom row
